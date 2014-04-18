@@ -13,17 +13,49 @@ function inherit(p) {
 	return new f();						// Use f() to create an "heir" of p.
 }
 
+
 /*
-*   Copy the enumerable properties of p to o, and return o.
-*   If o and p have a property by the same name, o's property is overwritten.
-*   This function does not handle getters and setters or copy attributes
+*   Define an extend function that copies the properties of is second and subsequent arguments into its first argument.
+*   We work around an IE bug here: in many version of IE, the for/in loop
+*   won't enumerate an enumerable property of o if the prototype of o has
+*   a nonenumerable property by the same name. This means that properties
+*   like toString are not handled correctly unless we explicitly check for them.
  */
-function extend(o, p) {
-    for(prop in p) {                // For all props in p
-        o[prop] = p[prop];          // Add the property to o
+var extend = function() {           // Assign the return value of this function
+    // First check for the presence of the bug before patching it.
+    for(var p in {toString:null}) {
+        // If we get here, then the for/in loop works correctly and we return a simple version of the extend() function
+
+        return function extend(o) {
+            for(var i = 1; i < arguments.length; i++) {
+                var source = arguments[i];
+                for(var prop in source) o[prop] = source[prop];
+            }
+            return o;
+        };
     }
-    return o;
-}
+
+    // If we get here, it means that for/in loop did not enumerate
+    // the toString property of the test object. So return a version
+    // of the extend() function that explicitly tests for the nonenumerable
+    // properties of Object.prototype.
+    return function patch_extend(o) {
+        for(var i = 1; i < arguments.length; i++) {
+            var source = arguments[i];
+            // Copy all the enumerable properties
+            for(var prop in source) o[prop] = source[prop];
+
+            // And now check the special-case properties
+            for(var j = 0; j < protoprops.length; j++) {
+                prop = protoprops[j];
+                if(source.hasOwnProperty(prop)) o[prop] = source[prop];
+            }
+        }
+    };
+
+    // This is the list of special-case properties we check for
+    var protoprops = ["toString", "valueOf", "constructor", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "toLocaleString"];
+};
 
 /*
  *   Copy the enumerable properties of p to o, and return o.
@@ -112,7 +144,7 @@ Object.defineProperty(Object.prototype,
                 // Skip props already in this object
                 if(names[i] in this) continue;
                 // Get property description from o
-                var desc = Object.getOwnPropertyNameso, names[i]);
+                var desc = Object.getOwnPropertyNames(o, names[i]);
                 // Use it to create property on this
                 Object.defineProperty(this, names[i], desc);
             }
